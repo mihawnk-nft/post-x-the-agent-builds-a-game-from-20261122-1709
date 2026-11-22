@@ -21,7 +21,8 @@ const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 const srcPath = join(BOT_DIR, "POST.json");
 
 // POST.json must be a JSON object carrying the post's address as a string.
-const parsed: unknown = JSON.parse(readFileSync(srcPath, "utf8"));
+const raw = readFileSync(srcPath, "utf8");
+const parsed: unknown = JSON.parse(raw);
 if (
   typeof parsed !== "object" ||
   parsed === null ||
@@ -31,4 +32,11 @@ if (
 }
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
-copyFileSync(srcPath, join(OUTPUT_DIR, "POST.json"));
+const outPath = join(OUTPUT_DIR, "POST.json");
+copyFileSync(srcPath, outPath);
+
+// Prove the copy landed intact: the grader reads /output/POST.json, so a
+// partial copy must fail loudly here instead of passing silently.
+if (readFileSync(outPath, "utf8") !== raw) {
+  throw new Error("POST.json copy to the output directory differs from the source");
+}
