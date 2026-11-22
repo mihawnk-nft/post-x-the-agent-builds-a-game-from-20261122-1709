@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tangkap Bintang — game dari satu prompt</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #191419; height: 100%; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
+  canvas { background: #241a24; border: 3px solid #c41c83; border-radius: 12px; touch-action: none; }
+  #hint { position: fixed; bottom: 12px; width: 100%; text-align: center; color: #bbb; font-size: 14px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="640"></canvas>
+<div id="hint">Gerakkan mouse / jari / panah kiri-kanan untuk menangkap bintang. 3 bintang jatuh = game over.</div>
+<script>
+"use strict";
+// Tangkap Bintang — game browser kecil dari satu prompt:
+// "Buatkan game browser kecil: tangkap bintang jatuh dengan keranjang,
+// skor naik tiap tangkapan, makin cepat makin seru. Satu file HTML."
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+
+let basket = { x: W / 2, w: 96, h: 18, y: H - 44 };
+let stars = [];
+let score = 0, missed = 0, level = 1, over = false;
+let nextSpawn = 0, last = performance.now();
+
+function spawnStar(now) {
+  stars.push({ x: 30 + Math.random() * (W - 60), y: -20, r: 12 + Math.random() * 8,
+               speed: 140 + level * 32 + Math.random() * 60, spin: Math.random() * Math.PI });
+  nextSpawn = now + Math.max(280, 850 - level * 70);
+}
+function starPath(x, y, r, rot) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const ang = rot + i * Math.PI / 5 - Math.PI / 2;
+    const rad = i % 2 === 0 ? r : r * 0.45;
+    const px = x + Math.cos(ang) * rad, py = y + Math.sin(ang) * rad;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  ctx.clearRect(0, 0, W, H);
+  // langit
+  ctx.fillStyle = "#241a24"; ctx.fillRect(0, 0, W, H);
+  // HUD
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 28px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("SKOR " + score, 16, 40);
+  ctx.textAlign = "right";
+  ctx.fillText("LEVEL " + level, W - 16, 40);
+  ctx.fillStyle = "#c41c83";
+  for (let i = 0; i < 3 - missed; i++) { ctx.beginPath(); ctx.arc(W - 30 - i * 30, 66, 8, 0, 7); ctx.fill(); }
+  if (!over) {
+    if (now > nextSpawn) spawnStar(now);
+    for (const s of stars) { s.y += s.speed * dt; s.spin += dt * 2; }
+    // tangkap / jatuh
+    stars = stars.filter(s => {
+      const caught = s.y + s.r >= basket.y && s.y - s.r <= basket.y + basket.h &&
+                     s.x >= basket.x - basket.w / 2 && s.x <= basket.x + basket.w / 2;
+      if (caught) { score += 10; if (score % 50 === 0) level++; return false; }
+      if (s.y - s.r > H) { missed++; if (missed >= 3) over = true; return false; }
+      return true;
+    });
+    // bintang
+    for (const s of stars) {
+      ctx.fillStyle = "#ffd23e"; starPath(s.x, s.y, s.r, s.spin); ctx.fill();
+      ctx.fillStyle = "#fff3b0"; starPath(s.x, s.y, s.r * 0.45, s.spin); ctx.fill();
+    }
+    // keranjang
+    ctx.fillStyle = "#c41c83";
+    ctx.beginPath();
+    ctx.moveTo(basket.x - basket.w / 2, basket.y);
+    ctx.lineTo(basket.x + basket.w / 2, basket.y);
+    ctx.lineTo(basket.x + basket.w / 2 - 12, basket.y + basket.h);
+    ctx.lineTo(basket.x - basket.w / 2 + 12, basket.y + basket.h);
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.font = "bold 44px sans-serif";
+    ctx.fillText("GAME OVER", W / 2, H / 2 - 20);
+    ctx.font = "28px sans-serif";
+    ctx.fillText("Skor akhir: " + score, W / 2, H / 2 + 30);
+    ctx.font = "20px sans-serif"; ctx.fillStyle = "#ffd23e";
+    ctx.fillText("Klik untuk main lagi", W / 2, H / 2 + 80);
+  }
+  requestAnimationFrame(frame);
+}
+function moveTo(clientX) {
+  const r = cv.getBoundingClientRect();
+  basket.x = Math.max(basket.w / 2, Math.min(W - basket.w / 2, (clientX - r.left) * W / r.width));
+}
+cv.addEventListener("mousemove", e => moveTo(e.clientX));
+cv.addEventListener("touchmove", e => { moveTo(e.touches[0].clientX); e.preventDefault(); }, { passive: false });
+cv.addEventListener("click", () => { if (over) { score = 0; missed = 0; level = 1; stars = []; over = false; } });
+window.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") basket.x = Math.max(basket.w / 2, basket.x - 28);
+  if (e.key === "ArrowRight") basket.x = Math.min(W - basket.w / 2, basket.x + 28);
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
